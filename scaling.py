@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
-csv_path = "C:/Users/namyj/OneDrive/바탕 화면/AB_NYC_2019.csv"
+df = pd.read_csv("AB_NYC_2019.csv")
 
 df = pd.read_csv(csv_path, encoding='cp949')
 
