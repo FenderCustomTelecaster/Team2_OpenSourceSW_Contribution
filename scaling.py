@@ -2,20 +2,15 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
-# 📌 CSV 경로 (경로는 본인에 맞게 수정하세요)
 csv_path = "C:/Users/namyj/OneDrive/바탕 화면/AB_NYC_2019.csv"
 
-# 1. 데이터 불러오기
 df = pd.read_csv(csv_path, encoding='cp949')
 
-# 2. 불필요한 열 제거
 df.drop(columns=['id', 'name', 'host_id', 'host_name', 'neighbourhood',
                  'latitude', 'longitude'], inplace=True, errors='ignore')
 
-# 3. 범주형 변수 원-핫 인코딩
 df = pd.get_dummies(df, columns=['neighbourhood_group', 'room_type'], drop_first=False)
 
-# 4. 결측치 처리
 df['reviews_per_month'].fillna(0, inplace=True)
 
 # 5. 리뷰 날짜 처리
