@@ -13,7 +13,7 @@ df = pd.get_dummies(df, columns=['neighbourhood_group', 'room_type'], drop_first
 
 df['reviews_per_month'].fillna(0, inplace=True)
 
-# 5. 리뷰 날짜 처리
+# 리뷰 날짜 처리
 if 'last_review' in df.columns:
     df['last_review'] = pd.to_datetime(df['last_review'], errors='coerce')
     ref_date = pd.to_datetime("2019-12-01")
@@ -21,10 +21,10 @@ if 'last_review' in df.columns:
     df['days_since_last_review'].fillna(df['days_since_last_review'].max() + 30, inplace=True)
     df.drop(columns=['last_review'], inplace=True)
 
-# 6. 수치형 컬럼만 추출
+# 수치형 컬럼만 추출
 numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
-# 7. 스케일러 정의
+# 스케일러 정의
 scalers = {
     'zscore': StandardScaler(),
     'minmax': MinMaxScaler(),
