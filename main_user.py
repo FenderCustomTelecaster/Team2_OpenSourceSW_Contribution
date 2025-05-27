@@ -1,17 +1,13 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split, RandomizedSearchCV
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-import xgboost as xgb
+from sklearn.cluster import KMeans
 
-# -----------------------/// Data load ///-----------------------
-train_path = r"C:\Users\kgmin\Desktop\workspace\3-1\dataScience\Team2_OpenSourceSW_Contribution-main\AB_NYC_2019.csv"
-df = pd.read_csv(train_path)
-# df.head()
-
-# -----------------------/// Data preprocessing ///-----------------------
+# --- (이전 코드 그대로 사용) ---
+# 데이터 로드 및 초기 전처리
+df = pd.read_csv(r"C:\Users\kgmin\Desktop\workspace\3-1\dataScience\Team2_OpenSourceSW_Contribution-main\AB_NYC_2019.csv")
 
 # haversine fuction
 def haversine(lat1, lon1, lat2, lon2):
@@ -26,7 +22,7 @@ def haversine(lat1, lon1, lat2, lon2):
 df.drop(columns=['id', 'name', 'host_id', 'host_name', 'neighbourhood'], inplace=True)
 
 df=pd.get_dummies(df,columns=['neighbourhood_group'])
-# df.head()
+# df.head() # 주석 처리
 
 dummy_cols = [col for col in df.columns if col.startswith('neighbourhood_group_')]
 
@@ -51,7 +47,7 @@ def compute_distance(row):
 
 df['distance_to_center'] = df.apply(compute_distance, axis=1)
 
-# df.head()
+# df.head() # 주석 처리
 
 # Calculate review date differences (smaller value in recent days)
 reference_date = pd.to_datetime("2019-12-01")
@@ -67,163 +63,223 @@ max_days = df['days_since_oldest_review'].max()
 df['days_since_oldest_review'] = max_days - df['days_since_oldest_review']
 df.drop(columns=['last_review'], inplace=True)
 
-# df[['days_since_oldest_review']].head()
+# df[['days_since_oldest_review']].head() # 주석 처리
 
 #room type one-hot encoding
 df['reviews_per_month'].fillna(0, inplace=True)
 df=pd.get_dummies(df,columns=['room_type'])
-# df.head()
+# df.head() # 주석 처리
 
 df.drop(columns=['latitude', 'longitude'], inplace=True)
-# df
+# df # 주석 처리
 
-# Remove price outlier (average: 152.72, minimum:0, maximum:10,000)
-df = df[df['price'] > 0]
-df = df[df['price'] < 2000] #수정가능
+# Columns to scale (all remaining columns in df now)
+features_to_scale = df.columns.tolist() # 스케일링할 피처 목록
 
-# log transform -> skewed distribution
-df['log_price'] = np.log1p(df['price'])
-df.drop(columns=['price'], inplace=True)
+# StandardScaler apply
+scaler = StandardScaler()
+scaled_array = scaler.fit_transform(df[features_to_scale].values)
 
-# Remove minimum day outlier (Average: 7, Minimum:1, Maximum:1250)
-df = df[df['minimum_nights'] >= 1]
-df = df[df['minimum_nights'] <= 30]
+# Rebuild to DataFrame
+df_std = pd.DataFrame(scaled_array, columns=features_to_scale, index=df.index)
 
-#data 48895 -> 48043
+# checking result
+print(df_std.head())
 
-# -----------------------/// Modeling / Evaluation ///-----------------------
+from sklearn.cluster import KMeans
+
+df_standard = df_std.copy() # 원본 df_std를 유지하기 위해 copy() 사용
+X_for_clustering = df_standard # 클러스터링을 위한 데이터
+
+sse = []  # Sum of Squared Errors
+
+# Perform KMeans by changing the K value from 1 to 10
+for k in range(1, 11):
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init='auto')
+    kmeans.fit(X_for_clustering)
+    sse.append(kmeans.inertia_)  # inertia_ == SSE
+
+# present graph
+plt.figure(figsize=(8, 5))
+plt.plot(range(1, 11), sse, marker='o')
+plt.title('Elbow Method For Optimal k')
+plt.xlabel('Number of clusters (k)')
+plt.ylabel('SSE (Inertia)')
+plt.grid(True)
+plt.show()
+
+from sklearn.metrics import silhouette_score
+
+# Use silhouette analysis to search for optimal K values
+silhouette_scores = []
+for k in range(2, 6):
+    kmeans = KMeans(n_clusters=k, random_state=0, n_init='auto') # n_init='auto' 추가
+    kmeans.fit(X_for_clustering)
+    score = silhouette_score(X_for_clustering, kmeans.labels_)
+    silhouette_scores.append(score)
+
+# present graph
+plt.figure(figsize=(8, 5)) # 새로운 figure 생성
+plt.plot(range(2, 6), silhouette_scores, marker='o')
+plt.title('Silhouette Score For Optimal k')
+plt.xlabel('Number of clusters (k)')
+plt.ylabel('Silhouette Score')
+plt.grid(True)
+plt.show()
+
+
+# Cluster with K=3
+kmeans = KMeans(n_clusters=3, random_state=0, n_init='auto') # n_init='auto' 추가
+df_standard['cluster'] = kmeans.fit_predict(X_for_clustering) # 클러스터 라벨 추가
+
+cluster_means = df_standard.groupby('cluster').mean(numeric_only=True)
+print("\n--- Cluster Means ---")
+print(cluster_means) # display 대신 print 사용 (VS Code 일반 실행 시)
+
+# import seaborn as sns # 이미 위에서 import 됨
+
+# Create boxplot based on df_scaled with cluster column
+features_for_boxplot = df_standard.columns.drop('cluster')  # exept 'cluster'
+
+# present box plot
+plt.figure(figsize=(20, 30))
+for i, feature in enumerate(features_for_boxplot):
+    plt.subplot(len(features_for_boxplot) // 2 + 1, 2, i + 1)
+    sns.boxplot(x='cluster', y=feature, data=df_standard)
+    plt.title(f'{feature} by Cluster')
+    plt.tight_layout()
+plt.show() # plt.show() 추가
+
+from sklearn.decomposition import PCA
+
+# PCA 2 deminsion visualization
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(df_standard.drop('cluster', axis=1))
+
+# present
+plt.figure(figsize=(8, 6))
+scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=df_standard['cluster'], cmap='viridis')
+plt.title('PCA Visualization of Clusters (K=3)')
+plt.xlabel('PCA Component 1')
+plt.ylabel('PCA Component 2')
+plt.colorbar(scatter, label='Cluster')
+plt.grid(True)
+plt.tight_layout()
+plt.show() # plt.show() 추가
+
+# -----------------------/// Modeling ///-----------------------
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV, train_test_split
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_curve, auc
+from sklearn.preprocessing import LabelBinarizer
+from scipy.stats import randint
+
+print("\n--- Random Forest Classifier with RandomizedSearchCV ---")
 
 # seperate feature/target
-X = df.drop(columns=['log_price'])
-y = df['log_price']
+X = df_standard.drop('cluster', axis=1)
+y = df_standard['cluster']
+
+print(f"Features (X) shape: {X.shape}")
+print(f"Target (y) shape: {y.shape}")
+print(f"Target class distribution:\n{y.value_counts()}")
 
 # train-test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-print(f"\nTraining data shape: X_train={X_train.shape}, y_train={y_train.shape}")
-print(f"Test data shape: X_test={X_test.shape}, y_test={y_test.shape}")
+print(f"\nTrain set shape for RandomizedSearchCV: {X_train.shape}, {y_train.shape}")
+print(f"Test set shape for final evaluation: {X_test.shape}, {y_test.shape}")
 
-# without using scailing - XGBoost is less sensitive to scailing
-X_to_train = X_train
-X_to_test = X_test
-feature_names_for_importance = X_train.columns
 
-# define XGBoost hyperparameter exploration range
-param_distributions_xgb = {
-    'n_estimators': [int(x) for x in np.linspace(start=100, stop=1000, num=10)],
-    'learning_rate': [0.01, 0.05, 0.1, 0.15, 0.2],
-    'max_depth': [3, 4, 5, 6, 7, 8],
-    'min_child_weight': [1, 3, 5, 7],
-    'subsample': [0.6, 0.7, 0.8, 0.9, 1.0],
-    'colsample_bytree': [0.6, 0.7, 0.8, 0.9, 1.0],
-    'gamma': [0, 0.1, 0.2, 0.3],
-    'reg_alpha': [0, 0.001, 0.01, 0.1],
-    'reg_lambda': [0.1, 0.5, 1, 1.5, 2]
+# initializing model
+rf_model = RandomForestClassifier(random_state=42)
+
+# 3. define hyperparameter exploration range
+param_distributions = {
+    'n_estimators': randint(100, 500),
+    'max_features': ['sqrt', 'log2', None],
+    'max_depth': randint(10, 100),
+    'min_samples_split': randint(2, 20),
+    'min_samples_leaf': randint(1, 10),
+    'bootstrap': [True, False]
 }
 
-# generating RandomizedSearchCV object / training
-xgb_base = xgb.XGBRegressor(objective='reg:squarederror',
-                            random_state=42,
-                            n_jobs=-1,
-                           )
+# generating RandomizedSearchCV object
+n_splits = 5
+skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
-print(f"\n--- Hyperparameter Tuning with RandomizedSearchCV for XGBoost ---")
+random_search = RandomizedSearchCV(
+    estimator=rf_model,
+    param_distributions=param_distributions,
+    n_iter=50,
+    cv=skf,
+    scoring='accuracy',
+    random_state=42,
+    n_jobs=-1,
+    verbose=2
+)
 
-# setting RandomizedSearchCV
-random_search_xgb = RandomizedSearchCV(estimator=xgb_base,
-                                       param_distributions=param_distributions_xgb,
-                                       n_iter=50,
-                                       cv=3,
-                                       scoring='neg_mean_squared_error',
-                                       verbose=2,
-                                       random_state=42,
-                                       n_jobs=-1)
+# training model
+print("\nStarting RandomizedSearchCV...")
+random_search.fit(X_train, y_train)
+print("RandomizedSearchCV finished.")
 
-random_search_xgb.fit(X_to_train, y_train)
+# 6. find best model
+print("\n--- Best Parameters and Score ---")
+print("Best parameters found: ", random_search.best_params_)
+print("Best cross-validation accuracy: {:.4f}".format(random_search.best_score_))
 
-print("\nXGBoost RandomizedSearchCV training complete.")
-print("Best hyperparameters found: ", random_search_xgb.best_params_)
-best_cv_rmse_xgb = np.sqrt(-random_search_xgb.best_score_)
-print(f"Best CV RMSE (log_price) for XGBoost: {best_cv_rmse_xgb:.4f}")
+best_rf_model = random_search.best_estimator_
 
-# find best model / prediction & evaluation
-best_xgb_model = random_search_xgb.best_estimator_
+print("\n--- Final Evaluation on Test Set with Best Model ---")
+y_pred_final = best_rf_model.predict(X_test)
 
-print("\n--- Model Evaluation (Best XGBoost Regressor from RandomizedSearchCV) ---")
-y_pred_log_xgb_tuned = best_xgb_model.predict(X_to_test)
+print("Test Accuracy:", accuracy_score(y_test, y_pred_final))
+print("\nClassification Report:\n", classification_report(y_test, y_pred_final))
+print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred_final))
 
-# evaluation (log)
-mse_log_xgb_tuned = mean_squared_error(y_test, y_pred_log_xgb_tuned)
-rmse_log_xgb_tuned = np.sqrt(mse_log_xgb_tuned)
-mae_log_xgb_tuned = mean_absolute_error(y_test, y_pred_log_xgb_tuned)
-r2_log_xgb_tuned = r2_score(y_test, y_pred_log_xgb_tuned)
+print("\n--- Feature Importances from Best Random Forest Model ---")
+feature_importances = pd.Series(best_rf_model.feature_importances_, index=X.columns)
+sorted_importances = feature_importances.sort_values(ascending=False)
+print(sorted_importances.head(10))
 
-print(f"Test RMSE (log_price): {rmse_log_xgb_tuned:.4f}")
-print(f"Test MAE (log_price): {mae_log_xgb_tuned:.4f}")
-print(f"Test R-squared (log_price): {r2_log_xgb_tuned:.4f}")
-
-# evaluation (original)
-y_test_original = np.expm1(y_test)
-y_pred_original_xgb_tuned = np.expm1(y_pred_log_xgb_tuned)
-y_pred_original_xgb_tuned[y_pred_original_xgb_tuned < 0] = 0 # ensure no negative predictions after expm1
-
-mse_original_xgb_tuned = mean_squared_error(y_test_original, y_pred_original_xgb_tuned)
-rmse_original_xgb_tuned = np.sqrt(mse_original_xgb_tuned)
-mae_original_xgb_tuned = mean_absolute_error(y_test_original, y_pred_original_xgb_tuned)
-
-abs_percentage_errors = np.abs((y_test_original - y_pred_original_xgb_tuned) / y_test_original)
-mape_xgb_tuned = np.mean(abs_percentage_errors) * 100
-
-percentage_errors = (y_test_original - y_pred_original_xgb_tuned) / y_test_original
-mpe_xgb_tuned = np.mean(percentage_errors) * 100
-
-print(f"\nTest RMSE (original price): ${rmse_original_xgb_tuned:.2f}")
-print(f"Test MAE (original price): ${mae_original_xgb_tuned:.2f}")
-print(f"Test MAPE (original price): {mape_xgb_tuned:.2f}%")
-print(f"Test MPE (original price): {mpe_xgb_tuned:.2f}%")
-
-
-# feature importances visualization
-print("\n--- Feature Importances (Best XGBoost Regressor) ---")
-importances_tuned_xgb = best_xgb_model.feature_importances_
-feature_importance_df_tuned_xgb = pd.DataFrame({'feature': feature_names_for_importance, 'importance': importances_tuned_xgb})
-feature_importance_df_tuned_xgb = feature_importance_df_tuned_xgb.sort_values(by='importance', ascending=False)
-
-print("Top 10 Feature Importances (Tuned XGBoost Model):")
-print(feature_importance_df_tuned_xgb.head(10))
-
-plt.figure(figsize=(10, 8))
-top_n_features = 15
-plt.barh(feature_importance_df_tuned_xgb['feature'][:top_n_features], feature_importance_df_tuned_xgb['importance'][:top_n_features])
-plt.xlabel("Feature Importance")
-plt.ylabel("Feature")
-plt.title(f"Top {top_n_features} Feature Importances from Tuned XGBoost Regressor")
-plt.gca().invert_yaxis()
+# visualizing feature importances
+plt.figure(figsize=(10, 6))
+sns.barplot(x=sorted_importances.head(10).values, y=sorted_importances.head(10).index)
+plt.title('Top 10 Feature Importances for Cluster Prediction (Best Random Forest)')
+plt.xlabel('Importance')
+plt.ylabel('Feature')
 plt.tight_layout()
 plt.show()
 
-# comparison prediction value with actual value
-plt.figure(figsize=(10, 6))
-plt.scatter(y_test_original, y_pred_original_xgb_tuned, alpha=0.3, label='Predicted vs Actual')
-min_val = min(y_test_original.min(), y_pred_original_xgb_tuned.min())
-max_val = max(y_test_original.max(), y_pred_original_xgb_tuned.max())
-plt.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='Perfect Prediction Line')
+# --- ROC Curve Plotting ---
+print("\n--- ROC Curve (One-vs-Rest) ---")
 
-plt.xlabel("Actual Price ($)")
-plt.ylabel("Predicted Price ($) - Tuned XGBoost")
-plt.title("Actual vs. Predicted Prices (Tuned XGBoost Regressor) - Original Scale")
-plt.legend()
+# 1. Get prediction probabilities
+y_proba = best_rf_model.predict_proba(X_test)
+
+# 2. Binarize the true labels for multi-class ROC
+lb = LabelBinarizer()
+y_test_binarized = lb.fit_transform(y_test)
+
+# 3. Plot ROC curve for each class
+plt.figure(figsize=(10, 8))
+colors = ['blue', 'red', 'green'] # Assuming 3 classes (0, 1, 2)
+
+for i, class_label in enumerate(lb.classes_):
+    fpr, tpr, _ = roc_curve(y_test_binarized[:, i], y_proba[:, i])
+    roc_auc = auc(fpr, tpr)
+    plt.plot(fpr, tpr, color=colors[i], lw=2,
+             label=f'ROC curve for class {class_label} (area = {roc_auc:.2f})')
+
+plt.plot([0, 1], [0, 1], 'k--', lw=2, label='Random Classifier (AUC = 0.50)')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate (FPR)')
+plt.ylabel('True Positive Rate (TPR)')
+plt.title('Receiver Operating Characteristic (ROC) Curve - One-vs-Rest')
+plt.legend(loc="lower right")
 plt.grid(True)
-plt.show()
-
-# plot residual
-residuals_xgb_tuned = y_test_original - y_pred_original_xgb_tuned
-
-plt.figure(figsize=(10, 6))
-plt.scatter(y_pred_original_xgb_tuned, residuals_xgb_tuned, alpha=0.3)
-plt.axhline(y=0, color='r', linestyle='--')
-plt.xlabel("Predicted Price ($) - Tuned XGBoost")
-plt.ylabel("Residuals (Actual - Predicted Price) ($)")
-plt.title("Residual Plot (Tuned XGBoost Regressor) - Original Scale")
-plt.grid(True)
+plt.tight_layout()
 plt.show()
