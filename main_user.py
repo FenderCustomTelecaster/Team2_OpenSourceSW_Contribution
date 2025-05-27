@@ -5,8 +5,6 @@ import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 
-# --- (이전 코드 그대로 사용) ---
-# 데이터 로드 및 초기 전처리
 df = pd.read_csv(r"C:\Users\kgmin\Desktop\workspace\3-1\dataScience\Team2_OpenSourceSW_Contribution-main\AB_NYC_2019.csv")
 
 # haversine fuction
@@ -22,7 +20,7 @@ def haversine(lat1, lon1, lat2, lon2):
 df.drop(columns=['id', 'name', 'host_id', 'host_name', 'neighbourhood'], inplace=True)
 
 df=pd.get_dummies(df,columns=['neighbourhood_group'])
-# df.head() # 주석 처리
+# df.head()
 
 dummy_cols = [col for col in df.columns if col.startswith('neighbourhood_group_')]
 
@@ -47,7 +45,7 @@ def compute_distance(row):
 
 df['distance_to_center'] = df.apply(compute_distance, axis=1)
 
-# df.head() # 주석 처리
+# df.head()
 
 # Calculate review date differences (smaller value in recent days)
 reference_date = pd.to_datetime("2019-12-01")
@@ -63,15 +61,14 @@ max_days = df['days_since_oldest_review'].max()
 df['days_since_oldest_review'] = max_days - df['days_since_oldest_review']
 df.drop(columns=['last_review'], inplace=True)
 
-# df[['days_since_oldest_review']].head() # 주석 처리
+# df[['days_since_oldest_review']].head()
 
 #room type one-hot encoding
 df['reviews_per_month'].fillna(0, inplace=True)
 df=pd.get_dummies(df,columns=['room_type'])
-# df.head() # 주석 처리
-
+# df.head()
 df.drop(columns=['latitude', 'longitude'], inplace=True)
-# df # 주석 처리
+# df
 
 # Columns to scale (all remaining columns in df now)
 features_to_scale = df.columns.tolist() # 스케일링할 피처 목록
@@ -134,9 +131,8 @@ df_standard['cluster'] = kmeans.fit_predict(X_for_clustering) # 클러스터 라
 
 cluster_means = df_standard.groupby('cluster').mean(numeric_only=True)
 print("\n--- Cluster Means ---")
-print(cluster_means) # display 대신 print 사용 (VS Code 일반 실행 시)
+print(cluster_means)
 
-# import seaborn as sns # 이미 위에서 import 됨
 
 # Create boxplot based on df_scaled with cluster column
 features_for_boxplot = df_standard.columns.drop('cluster')  # exept 'cluster'
@@ -148,7 +144,7 @@ for i, feature in enumerate(features_for_boxplot):
     sns.boxplot(x='cluster', y=feature, data=df_standard)
     plt.title(f'{feature} by Cluster')
     plt.tight_layout()
-plt.show() # plt.show() 추가
+plt.show()
 
 from sklearn.decomposition import PCA
 
@@ -165,7 +161,7 @@ plt.ylabel('PCA Component 2')
 plt.colorbar(scatter, label='Cluster')
 plt.grid(True)
 plt.tight_layout()
-plt.show() # plt.show() 추가
+plt.show()
 
 # -----------------------/// Modeling ///-----------------------
 
