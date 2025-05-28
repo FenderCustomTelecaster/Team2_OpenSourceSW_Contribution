@@ -5,7 +5,7 @@ import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 
-df = pd.read_csv(r"C:\Users\kgmin\Desktop\workspace\3-1\dataScience\Team2_OpenSourceSW_Contribution-main\AB_NYC_2019.csv")
+df = pd.read_csv(r"C:\Users\tjdru\가천대학교\25-1\데이터과학\Term_project\AB_NYC_2019.csv")
 
 # haversine fuction
 def haversine(lat1, lon1, lat2, lon2):
