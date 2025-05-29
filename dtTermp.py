@@ -18,10 +18,9 @@ from datetime import datetime
 RANDOM_STATE = 42
 REFERENCE_DATE = pd.to_datetime("2019-12-01")
 
-# ========================
-# Helper Functions
-# ========================
 
+#A function of calculating the distance between the location of each 
+#accommodation and the location of the city center (central) in the area
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     φ1, φ2 = np.radians(lat1), np.radians(lat2)
@@ -39,15 +38,20 @@ centers = {
     'Staten Island': (40.5795, -74.1502),
 }
 
+#Analyze the properties of each cluster and label the cluster according 
+#to the characteristics of each of the four clusters
 cluster_names = {
-    0: "도심 고급 숙소",
-    1: "외곽 저가 방",
-    2: "중간 가격대 관광 숙소",
-    3: "장기 임대 중심 외곽형",
+    0: "A high-end hotel located in the city center",
+    1: "A low-cost room outside",
+    2: "Accommodation suitable for mid-priced sightseeing",
+    3: "A long-term rental-oriented outer-style accommodation",
 }
 
+#Preprocessing function
+#one-hot encoding for 'neighbourhood', 'room_type', drop few columns
 def preprocess(df):
     df = df.copy()
+    #Drop all features that do not affect the result
     df.drop(columns=['id', 'name', 'host_id', 'host_name', 'neighbourhood'], errors='ignore', inplace=True)
 
     if 'neighbourhood_group' in df.columns:
@@ -59,6 +63,8 @@ def preprocess(df):
 
     df['last_review'] = pd.to_datetime(df['last_review'], errors='coerce')
     df['days_since_oldest_review'] = (REFERENCE_DATE - df['last_review']).dt.days
+    
+    #Missing value processing: no review → considered older than the oldest value max + 30
     df['days_since_oldest_review'] = df['days_since_oldest_review'].fillna(df['days_since_oldest_review'].max() + 30)
     max_days = df['days_since_oldest_review'].max()
     df['days_since_oldest_review'] = max_days - df['days_since_oldest_review']
@@ -110,7 +116,7 @@ for k in range(2, 6):
     silhouette_scores.append(score)
 
 # present graph
-plt.figure(figsize=(8, 5)) # 새로운 figure 생성
+plt.figure(figsize=(8, 5)) 
 plt.plot(range(2, 6), silhouette_scores, marker='o')
 plt.title('Silhouette Score For Optimal k')
 plt.xlabel('Number of clusters (k)')
@@ -129,6 +135,8 @@ y = df_scaled['cluster']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=RANDOM_STATE)
 
 # Tuned RandomForestClassifier(low depth)
+# Lower depth because of OVERFITTING
+# Hpyerparameters are set by RandomCV
 rf = RandomForestClassifier(
     n_estimators=100,
     max_depth=10,
@@ -141,7 +149,7 @@ rf = RandomForestClassifier(
 rf.fit(X_train, y_train)
 y_pred = rf.predict(X_test)
 
-#cross-validation accuracy
+#cross-validation accuracy(to check that high OOB score means overfitting, or great score of model)
 cv_scores = cross_val_score(rf, X, y, cv=5, scoring='accuracy')
 print("\nCross-Validation Scores:", cv_scores)
 print("\nMean Cross-Validation Accuracy:", np.mean(cv_scores))
@@ -153,7 +161,7 @@ print("\nMean Cross-Validation Accuracy:", np.mean(cv_scores))
 def visualize_results(X, y, y_pred, model):
     fig, axs = plt.subplots(2, 2, figsize=(14, 12))
 
-    # PCA 시각화
+    # PCA visualization
     pca = PCA(n_components=2)
     X_pca = pca.fit_transform(X)
     axs[0, 0].scatter(X_pca[:, 0], X_pca[:, 1], c=y, cmap='viridis', alpha=0.6)
@@ -212,7 +220,6 @@ def predict_cluster_from_csv(csv_path):
                 popup=f"{row['cluster_name']}"
             ).add_to(m)
     m.save("cluster_map.html")
-    print("지도 시각화가 cluster_map.html로 저장되었어!")
 
     return new_df[['latitude', 'longitude', 'predicted_cluster', 'cluster_name']]
 
