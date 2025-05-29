@@ -3,12 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 
+# 시드 고정
+np.random.seed(42)
+
 # -----------------------/// Data load ///-----------------------
-train_path = r"C:\Users\kgmin\Desktop\workspace\3-1\dataScience\Team2_OpenSourceSW_Contribution-main\AB_NYC_2019.csv"
+train_path = r"C:\Users\tjdru\가천대학교\25-1\데이터과학\Term_project\AB_NYC_2019.csv"
 df = pd.read_csv(train_path)
 df.head()
-
-# -----------------------/// Data preprocessing ///-----------------------
 
 # haversine fuction
 def haversine(lat1, lon1, lat2, lon2):
@@ -19,6 +20,9 @@ def haversine(lat1, lon1, lat2, lon2):
     a = np.sin(Δφ/2)**2 + np.cos(φ1)*np.cos(φ2)*np.sin(Δλ/2)**2
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
     return R * c
+
+df = pd.read_csv(train_path)
+df.head()
 
 df.drop(columns=['id', 'name', 'host_id', 'host_name', 'neighbourhood'], inplace=True)
 
@@ -88,21 +92,155 @@ df = df[df['minimum_nights'] <= 30]
 
 #data 48895 -> 48043
 
-# -----------------------/// Modeling ///-----------------------
+# Columns to scale (all remaining columns in df now)
+features_to_scale = df.columns.tolist() # 스케일링할 피처 목록
 
-from sklearn.model_selection import train_test_split, RandomizedSearchCV
+# StandardScaler apply
+scaler = StandardScaler()
+scaled_array = scaler.fit_transform(df[features_to_scale].values)
+
+# Rebuild to DataFrame
+df_std = pd.DataFrame(scaled_array, columns=features_to_scale, index=df.index)
+
+# checking result
+print(df_std.head())
+
+from sklearn.cluster import KMeans
+
+df_standard = df_std.copy() # 원본 df_std를 유지하기 위해 copy() 사용
+X_for_clustering = df_standard # 클러스터링을 위한 데이터
+
+sse = []
+
+# Perform KMeans by changing the K value from 1 to 10
+for k in range(1, 11):
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init='auto')
+    kmeans.fit(X_for_clustering)
+    sse.append(kmeans.inertia_)  # inertia_ == SSE
+
+# present graph
+plt.figure(figsize=(8, 5))
+plt.plot(range(1, 11), sse, marker='o')
+plt.title('Elbow Method For Optimal k')
+plt.xlabel('Number of clusters (k)')
+plt.ylabel('SSE (Inertia)')
+plt.grid(True)
+plt.show()
+
+# Cluster with K=4
+kmeans = KMeans(n_clusters=4, random_state=42, n_init='auto') # n_init='auto' 추가
+df_standard['cluster'] = kmeans.fit_predict(X_for_clustering) # 클러스터 라벨 추가
+
+cluster_means = df_standard.groupby('cluster').mean(numeric_only=True)
+print("\n--- Cluster Means ---")
+print(cluster_means)
+
+df['cluster'] = df_standard['cluster']
+df.head()
+
+# seperate feature/target
+X = df.drop(columns=['log_price']) #log_price color of all column → models except for the remaining column # model (Feature)
+y = df['log_price']
+
+# sepreate target y
+y = df['log_price']
+X = df.drop(columns=['log_price'])
+
+# StandardScaler
+scaler = StandardScaler()
+X_scaled_array = scaler.fit_transform(X)
+
+# Transform to DataFrame
+X_scaled = pd.DataFrame(X_scaled_array, columns=X.columns, index=X.index)
+
+#checking result
+print("Scaled feature data:")
+print(X_scaled.head())
+print("Target (log_price) data:")
+print(y.head())
+
+# checking demension
+print("Feature shape:", X_scaled.shape)
+print("Target shape:", y.shape)
+
+# -----------------------/// Linear Regression Modeling ///-----------------------
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-import xgboost as xgb
 
 # seperate feature/target
 X = df.drop(columns=['log_price'])
 y = df['log_price']
-
-# train-test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 print(f"\nTraining data shape: X_train={X_train.shape}, y_train={y_train.shape}")
 print(f"Test data shape: X_test={X_test.shape}, y_test={y_test.shape}")
+
+
+
+print("\n--- Linear Regression Model Training and Evaluation ---")
+
+# Train Linear Regression model
+lr_model = LinearRegression()
+lr_model.fit(X_train, y_train)
+
+# Predict on test set (log_price)
+y_pred_log_lr = lr_model.predict(X_test)
+
+# Evaluation metrics (log scale)
+mse_log_lr = mean_squared_error(y_test, y_pred_log_lr)
+rmse_log_lr = np.sqrt(mse_log_lr)
+mae_log_lr = mean_absolute_error(y_test, y_pred_log_lr)
+r2_log_lr = r2_score(y_test, y_pred_log_lr)
+
+print(f"Test RMSE (log_price): {rmse_log_lr:.4f}")
+print(f"Test MAE (log_price): {mae_log_lr:.4f}")
+print(f"Test R-squared (log_price): {r2_log_lr:.4f}")
+
+# evaluation (original)
+y_test_original = np.expm1(y_test)
+y_pred_original_lr_tuned = np.expm1(y_pred_log_lr)
+y_pred_original_lr_tuned[y_pred_original_lr_tuned < 0] = 0
+
+# Convert back to original scale for evaluation
+y_pred_original_lr = np.expm1(y_pred_log_lr)
+y_pred_original_lr[y_pred_original_lr < 0] = 0  # Clip negative predictions
+
+mse_original_lr = mean_squared_error(y_test_original, y_pred_original_lr)
+rmse_original_lr = np.sqrt(mse_original_lr)
+mae_original_lr = mean_absolute_error(y_test_original, y_pred_original_lr)
+
+print(f"\nTest RMSE (original price): ${rmse_original_lr:.2f}")
+print(f"Test MAE (original price): ${mae_original_lr:.2f}")
+
+# Scatter plot: actual vs predicted (original scale)
+plt.figure(figsize=(10, 6))
+plt.scatter(y_test_original, y_pred_original_lr, alpha=0.3, label='Predicted vs Actual')
+min_val = min(y_test_original.min(), y_pred_original_lr_tuned.min())
+max_val = max(y_test_original.max(), y_pred_original_lr_tuned.max())
+plt.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='Perfect Prediction Line')
+plt.xlabel("Actual Price ($)")
+plt.ylabel("Predicted Price ($) - Linear Regression")
+plt.title("Actual vs. Predicted Prices (Linear Regression) - Original Scale")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Residual plot
+residuals_lr = y_test_original - y_pred_original_lr
+plt.figure(figsize=(10, 6))
+plt.scatter(y_pred_original_lr, residuals_lr, alpha=0.3)
+plt.axhline(y=0, color='r', linestyle='--')
+plt.xlabel("Predicted Price ($) - Linear Regression")
+plt.ylabel("Residuals (Actual - Predicted Price) ($)")
+plt.title("Residual Plot (Linear Regression) - Original Scale")
+plt.grid(True)
+plt.show()
+
+# -----------------------/// Modeling ///-----------------------
+
+from sklearn.model_selection import  RandomizedSearchCV
+import xgboost as xgb
 
 # without using scailing - XGBoost is less sensitive to scailing
 X_to_train = X_train
@@ -134,7 +272,7 @@ print(f"\n--- Hyperparameter Tuning with RandomizedSearchCV for XGBoost ---")
 random_search_xgb = RandomizedSearchCV(estimator=xgb_base,
                                        param_distributions=param_distributions_xgb,
                                        n_iter=50,
-                                       cv=3, 
+                                       cv=3,
                                        scoring='neg_mean_squared_error',
                                        verbose=2,
                                        random_state=42,
