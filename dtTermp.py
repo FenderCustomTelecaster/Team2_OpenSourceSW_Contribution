@@ -154,6 +154,8 @@ cv_scores = cross_val_score(rf, X, y, cv=5, scoring='accuracy')
 print("\nCross-Validation Scores:", cv_scores)
 print("\nMean Cross-Validation Accuracy:", np.mean(cv_scores))
 
+print("\nCLssification report",classification_report(y_test, y_pred))
+
 # ========================
 # Visualization
 # ========================
