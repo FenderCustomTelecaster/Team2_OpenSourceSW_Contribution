@@ -118,7 +118,32 @@ The system is divided into **User** and **Host** perspectives.
 
 ---
 
-## ✅ Final Model Selection
+## ✅ Final Model Selection & top 5 combination
+
+-Modeling Approach(to find top 5 combination)
+A top-level function (auto_train_and_evaluate) was created to:
+
+- Automatically handle preprocessing.
+- Train and evaluate multiple regression models.
+- Use GridSearchCV with 5-fold cross-validation.
+- Rank models based on R² score.
+- Return the top N performing models with optimal hyperparameters.
+Regression Models Used
+- RandomForestRegressor: n_estimators, max_depth
+- GradientBoostingRegressor: n_estimators, learning_rate
+- SVR: C, kernel
+- DecisionTreeRegressor: max_depth
+- LinearRegression: No tuning
+Evaluation Metric
+- R² Score was used to evaluate model performance.
+- The higher the R², the better the model explains variance in the data.
+Results (Top 5 Models)
+1. GradientBoostingRegressor – R²: 0.6153 – Best Params: {'n_estimators': 100, 'learning_rate': 0.1}
+2. RandomForestRegressor – R²: 0.6042 – Best Params: {'n_estimators': 100, 'max_depth': 20}
+3. SVR – R²: 0.5527 – Best Params: {'C': 1, 'kernel': 'rbf'}
+4. DecisionTreeRegressor – R²: 0.5045 – Best Params: {'max_depth': 10}
+5. LinearRegression – R²: 0.4651 – Best Params: {}
+
 
 - **Best model**: XGBoost Regressor with KMeans clusters as features.
 - **Best classifier**: RandomForestClassifier with OOB validation.
